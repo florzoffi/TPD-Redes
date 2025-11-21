@@ -1,0 +1,67 @@
+==== Comparación de checksums (todas las ejecuciones) ====
+[OK] test=T1_small_file step=envio_unico
+  local : /home/p_cacchiotti/projects/TPD-Redes/tests/data/small.txt
+  remoto: /home/p_cacchiotti/projects/TPD-Redes/t1s.dat
+  md5_local : 9994e8497ff47712ed62ab09c42c3424
+  md5_remoto: 9994e8497ff47712ed62ab09c42c3424
+
+[OK] test=T4_mixed_credentials step=cliente_valido
+  local : /home/p_cacchiotti/projects/TPD-Redes/tests/data/big1.bin
+  remoto: /home/p_cacchiotti/projects/TPD-Redes/t4ok.bin
+  md5_local : 21d255898d0c9f5ad65534fd459735d4
+  md5_remoto: 21d255898d0c9f5ad65534fd459735d4
+
+[OK] test=T5_partial_block step=partial
+  local : /home/p_cacchiotti/projects/TPD-Redes/tests/data/partial.bin
+  remoto: /home/p_cacchiotti/projects/TPD-Redes/t5part.bin
+  md5_local : 9185e24c01df190b519497356f3f44e0
+  md5_remoto: 9185e24c01df190b519497356f3f44e0
+
+[OK] test=T6_repeated_small step=run_1
+  local : /home/p_cacchiotti/projects/TPD-Redes/tests/data/small.txt
+  remoto: /home/p_cacchiotti/projects/TPD-Redes/t6r1.dat
+  md5_local : 9994e8497ff47712ed62ab09c42c3424
+  md5_remoto: 9994e8497ff47712ed62ab09c42c3424
+
+[OK] test=T6_repeated_small step=run_2
+  local : /home/p_cacchiotti/projects/TPD-Redes/tests/data/small.txt
+  remoto: /home/p_cacchiotti/projects/TPD-Redes/t6r2.dat
+  md5_local : 9994e8497ff47712ed62ab09c42c3424
+  md5_remoto: 9994e8497ff47712ed62ab09c42c3424
+
+[OK] test=T6_repeated_small step=run_3
+  local : /home/p_cacchiotti/projects/TPD-Redes/tests/data/small.txt
+  remoto: /home/p_cacchiotti/projects/TPD-Redes/t6r3.dat
+  md5_local : 9994e8497ff47712ed62ab09c42c3424
+  md5_remoto: 9994e8497ff47712ed62ab09c42c3424
+
+[OK] test=T7_mixed_parallel step=small
+  local : /home/p_cacchiotti/projects/TPD-Redes/tests/data/small.txt
+  remoto: /home/p_cacchiotti/projects/TPD-Redes/t7s.dat
+  md5_local : 9994e8497ff47712ed62ab09c42c3424
+  md5_remoto: 9994e8497ff47712ed62ab09c42c3424
+
+[OK] test=T7_mixed_parallel step=big
+  local : /home/p_cacchiotti/projects/TPD-Redes/tests/data/big3.bin
+  remoto: /home/p_cacchiotti/projects/TPD-Redes/t7b.bin
+  md5_local : 8b594b7d1651ddd38cd0f3b42963a48d
+  md5_remoto: 8b594b7d1651ddd38cd0f3b42963a48d
+
+[OK] test=T8_bad_server_drop_ack step=drop_first_data_ack
+  local : /home/p_cacchiotti/projects/TPD-Redes/tests/data/small.txt
+  remoto: /home/p_cacchiotti/projects/TPD-Redes/t8_bad_srv.dat
+  md5_local : 9994e8497ff47712ed62ab09c42c3424
+  md5_remoto: 9994e8497ff47712ed62ab09c42c3424
+
+[OK] test=T10_bad_server_delay_ack step=delay_first_data_ack
+  local : /home/p_cacchiotti/projects/TPD-Redes/tests/data/small.txt
+  remoto: /home/p_cacchiotti/projects/TPD-Redes/t10_bad_srv_delay.dat
+  md5_local : 9994e8497ff47712ed62ab09c42c3424
+  md5_remoto: 9994e8497ff47712ed62ab09c42c3424
+
+[OK] test=T11_bad_server_wrong_ack_seq step=wrong_seq_ack_once
+  local : /home/p_cacchiotti/projects/TPD-Redes/tests/data/small.txt
+  remoto: /home/p_cacchiotti/projects/TPD-Redes/t11_bad_srv_wrongack.dat
+  md5_local : 9994e8497ff47712ed62ab09c42c3424
+  md5_remoto: 9994e8497ff47712ed62ab09c42c3424
+
