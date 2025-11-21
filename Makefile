@@ -1,24 +1,22 @@
 CC := gcc
-CFLAGS := -Wall -Wextra -std=c11
+CFLAGS := -Wall -Wextra -std=c11 -O2
 
-SRC_DIR := src
-INCLUDES := -I$(SRC_DIR)
+UDP_CLIENT_SRC := udp/udp_client.c
+UDP_SERVER_SRC := udp/udp_server.c
+UDP_HEADER := udp/protocol.h
 
-SERVER_SRCS := $(SRC_DIR)/server.c
-CLIENT_SRCS := $(SRC_DIR)/client.c
+CLIENT_BIN := client
+SERVER_BIN := server
 
-.PHONY: all clean server client
+.PHONY: all clean
 
-all: server client
+all: $(CLIENT_BIN) $(SERVER_BIN)
 
-server: $(SERVER_SRCS) $(SRC_DIR)/protocol.h
-	$(CC) $(CFLAGS) $(INCLUDES) $(SERVER_SRCS) -o server
+$(CLIENT_BIN): $(UDP_CLIENT_SRC) $(UDP_HEADER)
+	$(CC) $(CFLAGS) -o $(CLIENT_BIN) $(UDP_CLIENT_SRC)
 
-server_tester:
-	$(CC) $(CFLAGS) $(INCLUDES) -O2 -DTEST_SLOW -o server $(SERVER_SRCS)
-
-client: $(CLIENT_SRCS) $(SRC_DIR)/protocol.h
-	$(CC) $(CFLAGS) $(INCLUDES) $(CLIENT_SRCS) -o client
+$(SERVER_BIN): $(UDP_SERVER_SRC) $(UDP_HEADER)
+	$(CC) $(CFLAGS) -o $(SERVER_BIN) $(UDP_SERVER_SRC)
 
 clean:
-	rm -f server client
+	rm -f $(CLIENT_BIN) $(SERVER_BIN)

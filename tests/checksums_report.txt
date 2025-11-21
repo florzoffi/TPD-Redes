@@ -1,0 +1,1 @@
+==== Comparación de checksums (todas las ejecuciones) ====
