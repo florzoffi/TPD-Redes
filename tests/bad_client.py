@@ -1,11 +1,21 @@
 #!/usr/bin/env python3
+"""
+bad_client.py
+
+Cliente UDP "malicioso" para testear el servidor C (udp_server.c).
+
+Soporta los modos:
+  - bad_seq_order:  HELLO + WRQ válidos, luego primer DATA con seq=1 (en vez de 0).
+  - wrq_without_hello: envía WRQ sin haber hecho HELLO.
+  - data_without_wrq: envía DATA sin HELLO ni WRQ.
+  - fin_wrong_filename: HELLO + WRQ + DATA correctos, pero FIN con filename distinto.
+"""
+
 import argparse
 import socket
-import struct
-import sys
-import time
 from pathlib import Path
 
+# Debe coincidir con protocol.h
 SERVER_PORT = 20252
 
 TYPE_HELLO = 1
@@ -14,214 +24,171 @@ TYPE_DATA  = 3
 TYPE_ACK   = 4
 TYPE_FIN   = 5
 
-MAX_PDU_SIZE = 1500
-CREDENTIAL = b"g17-d111"  # misma que VALID_CREDENTIAL en server.c
+MAX_DATA_SIZE = 1478  # igual que en el TP
 
 
-def send_pdu(sock: socket.socket, addr, pdu_type: int, seq: int, payload: bytes = b""):
-    if len(payload) > (MAX_PDU_SIZE - 2):
+def send_pdu(sock: socket.socket, addr, pdu_type: int, seq: int, payload: bytes = b"") -> None:
+    if len(payload) > MAX_DATA_SIZE:
         raise ValueError("payload demasiado grande")
-    pdu = struct.pack("!BB", pdu_type, seq) + payload
-    sock.sendto(pdu, addr)
+    buf = bytes([pdu_type & 0xFF, seq & 0xFF]) + payload
+    sock.sendto(buf, addr)
 
 
-def wait_ack(sock: socket.socket, addr, expected_type: int, expected_seq: int, timeout: float = 1.0):
-    sock.settimeout(timeout)
-    while True:
-        try:
-            data, from_addr = sock.recvfrom(MAX_PDU_SIZE)
-        except socket.timeout:
-            return None, None
-
-        if from_addr[0] != addr[0] or from_addr[1] != addr[1]:
-            continue
-        if len(data) < 2:
-            continue
-
-        ptype, pseq = data[0], data[1]
-        payload = data[2:]
-
-        if ptype == expected_type and pseq == expected_seq:
-            return pseq, payload
-        # si no matchea, ignoramos y seguimos esperando (como el cliente C)
+def send_hello(sock, addr, cred: bytes) -> None:
+    # El servidor no chequea seq para HELLO, sólo copia la seq al ACK.
+    # Usamos seq=0.
+    print(f"[BAD_CLIENT] Enviando HELLO cred={cred!r}")
+    send_pdu(sock, addr, TYPE_HELLO, 0, cred)
 
 
-def mode_bad_seq_order(sock, addr, remote_name: str, local_path: Path):
+def send_wrq(sock, addr, filename: bytes) -> None:
+    # WRQ: payload = filename + '\0'
+    if b"\x00" in filename:
+        raise ValueError("filename no debe contener NUL")
+    payload = filename + b"\x00"
+    print(f"[BAD_CLIENT] Enviando WRQ filename={filename!r}")
+    send_pdu(sock, addr, TYPE_WRQ, 0, payload)
+
+
+def send_file_data_normal(sock, addr, local_file: Path) -> None:
     """
-    HELLO + WRQ correctos, primer DATA con seq=1 en vez de 0.
-    Esto debería gatillar que el server ignore ese DATA fuera de orden.
+    Envía DATA "bien formado":
+    - primera PDU DATA con seq=0
+    - siguiente con seq=1, etc. (alternando)
     """
-    # HELLO
-    send_pdu(sock, addr, TYPE_HELLO, 0, CREDENTIAL)
-    seq, payload = wait_ack(sock, addr, TYPE_ACK, 0, timeout=1.0)
-    if seq is None or (payload and len(payload) > 0):
-        print("[BAD_CLIENT] HELLO rechazado o sin ACK")
-        return
-
-    # WRQ (filename\0, seq=1)
-    fn_bytes = remote_name.encode("ascii", errors="strict") + b"\x00"
-    send_pdu(sock, addr, TYPE_WRQ, 1, fn_bytes)
-    seq, payload = wait_ack(sock, addr, TYPE_ACK, 1, timeout=1.0)
-    if seq is None or (payload and len(payload) > 0):
-        print("[BAD_CLIENT] WRQ rechazado o sin ACK")
-        return
-
-    # Primer DATA mal: seq=1 (el server espera 0)
-    data = local_path.read_bytes()
-    chunk = data[:512]  # no importa el tamaño exacto, es sólo para molestar
-    send_pdu(sock, addr, TYPE_DATA, 1, chunk)
-    print("[BAD_CLIENT] HELLO + WRQ correctos, primer DATA con seq=1 en vez de 0")
-
-    # Miramos si responde algo, pero no es obligatorio
-    _, _ = wait_ack(sock, addr, TYPE_ACK, 1, timeout=1.0)
+    seq = 0
+    print(f"[BAD_CLIENT] Enviando DATA normal desde {local_file}")
+    with local_file.open("rb") as f:
+        while True:
+            chunk = f.read(MAX_DATA_SIZE)
+            if not chunk:
+                break
+            send_pdu(sock, addr, TYPE_DATA, seq, chunk)
+            seq ^= 1
 
 
-def mode_wrq_without_hello(sock, addr, remote_name: str):
+def send_file_data_bad_seq_first(sock, addr, local_file: Path) -> None:
     """
-    Manda un WRQ sin haber mandado HELLO antes.
-    El server debería descartar silenciosamente y no crear archivo.
+    Modo "bad_seq_order":
+    - Envía UN solo bloque DATA, pero con seq=1 en lugar de 0.
+    Esto hace que el server ignore el bloque (espera 0), dejando
+    el archivo creado en 0 bytes.
     """
-    fn_bytes = remote_name.encode("ascii", errors="strict") + b"\x00"
-    send_pdu(sock, addr, TYPE_WRQ, 1, fn_bytes)
-    print("[BAD_CLIENT] Mando WRQ sin HELLO previo")
-    time.sleep(0.1)
+    print(f"[BAD_CLIENT] Enviando DATA con seq=1 (fuera de orden) desde {local_file}")
+    with local_file.open("rb") as f:
+        chunk = f.read(MAX_DATA_SIZE)
+        if not chunk:
+            # Si el archivo está vacío, igual mandamos un DATA vacío con seq=1,
+            # el server no escribirá nada.
+            chunk = b""
+        send_pdu(sock, addr, TYPE_DATA, 1, chunk)
 
 
-def mode_data_without_wrq(sock, addr, local_path: Path):
+def send_fin(sock, addr, filename: bytes) -> None:
     """
-    Manda un DATA sin haber hecho HELLO ni WRQ.
-    El server debería descartar silenciosamente y no crear archivo.
+    Envía FIN con filename dado (null-terminated).
     """
-    data = local_path.read_bytes()
-    chunk = data[:512]
-    send_pdu(sock, addr, TYPE_DATA, 0, chunk)
-    print("[BAD_CLIENT] Mando DATA sin HELLO ni WRQ")
-    time.sleep(0.1)
-
-def mode_fin_wrong_filename(sock, addr, remote_ok: str, remote_wrong: str, local_path: Path):
-    """
-    Envía:
-      - HELLO correcto
-      - WRQ correcto usando remote_ok
-      - DATA correcto
-      - FIN con filename incorrecto (remote_wrong)
-    """
-    # HELLO
-    send_pdu(sock, addr, TYPE_HELLO, 0, CREDENTIAL)
-    seq, payload = wait_ack(sock, addr, TYPE_ACK, 0, timeout=1.0)
-    if seq is None:
-        print("[BAD_CLIENT] HELLO rechazado o sin ACK")
-        return
-
-    # WRQ correcto
-    fn_bytes = remote_ok.encode("ascii", errors="strict") + b"\x00"
-    send_pdu(sock, addr, TYPE_WRQ, 1, fn_bytes)
-    seq, payload = wait_ack(sock, addr, TYPE_ACK, 1, timeout=1.0)
-    if seq is None:
-        print("[BAD_CLIENT] WRQ rechazado o sin ACK")
-        return
-
-    # DATA correcto seq=0
-    data = local_path.read_bytes()
-    chunk = data[:512]
-    send_pdu(sock, addr, TYPE_DATA, 0, chunk)
-    seq, payload = wait_ack(sock, addr, TYPE_ACK, 0, timeout=1.0)
-    # Si no hay ACK igual seguimos, no importa mucho
-
-    # FIN INCORRECTO
-    bad_fn = remote_wrong.encode("ascii", errors="replace") + b"\x00"
-    send_pdu(sock, addr, TYPE_FIN, 1, bad_fn)
-    print(f"[BAD_CLIENT] FIN malformado enviado (filename '{remote_wrong}')")
+    if b"\x00" in filename:
+        raise ValueError("filename no debe contener NUL")
+    payload = filename + b"\x00"
+    print(f"[BAD_CLIENT] Enviando FIN filename={filename!r}")
+    # seq arbitraria (el servidor no la usa para lógica, sólo la copia al ACK)
+    send_pdu(sock, addr, TYPE_FIN, 0, payload)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Cliente UDP 'malo' para testear el server C.")
-    parser.add_argument("server_ip", type=str, help="IP del servidor C (ej. 127.0.0.1)")
+    parser = argparse.ArgumentParser(
+        description="Cliente UDP malicioso para probar udp_server.c",
+    )
+    parser.add_argument(
+        "server_ip",
+        help="IP del servidor (por ejemplo 127.0.0.1)",
+    )
     parser.add_argument(
         "--mode",
-        choices=["bad_seq_order", "wrq_without_hello", "data_without_wrq", "fin_wrong_filename"],
+        choices=[
+            "bad_seq_order",
+            "wrq_without_hello",
+            "data_without_wrq",
+            "fin_wrong_filename",
+        ],
         required=True,
-        help="Tipo de comportamiento incorrecto a generar.",
+        help="Modo de prueba maliciosa",
     )
     parser.add_argument(
         "--remote-name",
-        type=str,
-        default="bad.dat",
-        help="Nombre de archivo remoto (para modos que lo usan).",
+        help="Nombre remoto (filename) a usar en modos que lo requieran",
     )
     parser.add_argument(
         "--local-file",
-        type=str,
-        default=None,
-        help="Archivo local (para modos que envían DATA).",
+        help="Archivo local a leer en modos que lo requieran",
     )
-
-    parser.add_argument(
-        "--remote-ok",
-        type=str,
-        help="Nombre remoto correcto para WRQ."
-    )
-    parser.add_argument(
-        "--remote-wrong",
-        type=str,
-        help="Nombre remoto ERRÓNEO para el FIN."
-    )
-
 
     args = parser.parse_args()
-    addr = (args.server_ip, SERVER_PORT)
-
-    local_path = None
-    if args.local_file is not None:
-        local_path = Path(args.local_file).resolve()
-        if not local_path.is_file():
-            print(f"[BAD_CLIENT] Archivo local no encontrado: {local_path}")
-            sys.exit(1)
+    server_addr = (args.server_ip, SERVER_PORT)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
     try:
         if args.mode == "bad_seq_order":
-            if local_path is None:
-                print("[BAD_CLIENT] --local-file es obligatorio en mode=bad_seq_order")
-                sys.exit(1)
-            mode_bad_seq_order(sock, addr, args.remote_name, local_path)
-        elif args.mode == "wrq_without_hello":
-            mode_wrq_without_hello(sock, addr, args.remote_name)
-        elif args.mode == "data_without_wrq":
-            if local_path is None:
-                print("[BAD_CLIENT] --local-file es obligatorio en mode=data_without_wrq")
-                sys.exit(1)
-            mode_data_without_wrq(sock, addr, local_path)
-            
-        elif not args.remote_name or not args.local_file:
-            parser.error("modo fin_wrong_filename requiere --remote-name y --local-file")
+            # Necesita remote-name y local-file
+            if not args.remote_name or not args.local_file:
+                parser.error("bad_seq_order requiere --remote-name y --local-file")
 
-            remote_ok = args.remote_name
-            local_path = args.local_file
+            local = Path(args.local_file)
+            remote = args.remote_name.encode("ascii", errors="strict")
 
-            # Podés construir cualquier nombre "malo" distinto.
-            # No importa la longitud porque sólo se usa en FIN y el server no crea archivo nuevo con esto.
-            wrong_name = "X" + remote_ok
-
-            # Crear socket y armar dirección de server (usa el mismo esquema que tus otros modos)
-            sock = socket.socket(socket.AF_INET, SOCK_DGRAM)
-            server_addr = (args.server_ip, SERVER_PORT)
-
-            # 1) HELLO válido
+            # HELLO válido
             send_hello(sock, server_addr, b"g17-d111")
+            # WRQ correcto
+            send_wrq(sock, server_addr, remote)
+            # DATA con seq=1 (fuera de orden)
+            send_file_data_bad_seq_first(sock, server_addr, local)
+            # No mandamos FIN: el test sólo chequea que el archivo exista y tenga 0 bytes.
 
-            # 2) WRQ con filename correcto (remote_ok)
-            send_wrq(sock, server_addr, remote_ok.encode("ascii"))
+        elif args.mode == "wrq_without_hello":
+            # Sólo WRQ, sin HELLO
+            if not args.remote_name:
+                parser.error("wrq_without_hello requiere --remote-name")
+            remote = args.remote_name.encode("ascii", errors="strict")
+            send_wrq(sock, server_addr, remote)
 
-            # 3) DATA "normal" con el archivo local (podés reutilizar tu lógica de envío por bloques)
-            send_file_data(sock, server_addr, local_path)
+        elif args.mode == "data_without_wrq":
+            # Sólo DATA, sin HELLO ni WRQ
+            if not args.local_file:
+                parser.error("data_without_wrq requiere --local-file")
+            local = Path(args.local_file)
+            print("[BAD_CLIENT] Enviando DATA sin HELLO ni WRQ")
+            with local.open("rb") as f:
+                chunk = f.read(MAX_DATA_SIZE)
+                if not chunk:
+                    chunk = b""
+                # seq=0, pero el server está en WAIT_HELLO y no tiene fp -> lo ignora
+                send_pdu(sock, server_addr, TYPE_DATA, 0, chunk)
 
-            # 4) FIN con filename incorrecto
-            send_fin(sock, server_addr, wrong_name.encode("ascii"))
+        elif args.mode == "fin_wrong_filename":
+            # HELLO + WRQ + DATA correctos, FIN con nombre distinto
+            if not args.remote_name or not args.local_file:
+                parser.error("fin_wrong_filename requiere --remote-name y --local-file")
 
-            sock.close()
+            local = Path(args.local_file)
+            remote_ok = args.remote_name.encode("ascii", errors="strict")
 
-            mode_fin_wrong_filename(sock, addr, args.remote_ok, args.remote_wrong, local_path)
+            # Un nombre distinto para el FIN
+            wrong = b"ZZ" + remote_ok  # sigue siendo ASCII, distinto
+
+            # HELLO válido
+            send_hello(sock, server_addr, b"g17-d111")
+            # WRQ correcto -> el server crea el archivo con remote_ok
+            send_wrq(sock, server_addr, remote_ok)
+            # DATA "normal" -> el server escribe correctamente el archivo
+            send_file_data_normal(sock, server_addr, local)
+            # FIN con filename INCORRECTO
+            send_fin(sock, server_addr, wrong)
+            print(f"[BAD_CLIENT] FIN malformado enviado (filename {wrong.decode(errors='ignore')!r})")
+
+        else:
+            parser.error(f"Modo no implementado: {args.mode}")
 
     finally:
         sock.close()

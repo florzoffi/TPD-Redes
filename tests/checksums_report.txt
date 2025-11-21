@@ -143,3 +143,9 @@
   md5_local : 9994e8497ff47712ed62ab09c42c3424
   md5_remoto: 9994e8497ff47712ed62ab09c42c3424
 
+[OK] test=T22_fin_wrong_filename step=fin_wrong_filename_okfile
+  local : /Users/florenciazoffi/Desktop/code/Redes/TPD-Redes/tests/data/small.txt
+  remoto: /Users/florenciazoffi/Desktop/code/Redes/TPD-Redes/t22ok.bin
+  md5_local : 9994e8497ff47712ed62ab09c42c3424
+  md5_remoto: 9994e8497ff47712ed62ab09c42c3424
+
