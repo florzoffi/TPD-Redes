@@ -32,8 +32,7 @@ typedef struct {
 
 static client_t clients[MAX_CLIENTS];
 
-// Ajustá acá la credencial que te dé la cátedra
-static const char *VALID_CREDENTIAL = "MI_CREDENCIAL_DE_GRUPO";
+static const char *VALID_CREDENTIAL = "g17-d111";
 
 // ---------- helpers ----------
 
@@ -172,7 +171,12 @@ static void handle_wrq(int sock, int idx, const pdu_t *pdu) {
     }
 
     const char *filename = (const char *)pdu->data;
-    size_t len = strnlen(filename, FILENAME_MAX_LEN + 2);
+
+    // 🔧 Reemplazo de strnlen: calculo largo a mano, pero máximo FILENAME_MAX_LEN+2
+    size_t len = 0;
+    while (len < FILENAME_MAX_LEN + 2 && filename[len] != '\0') {
+        len++;
+    }
 
     if (len < FILENAME_MIN_LEN || len > FILENAME_MAX_LEN) {
         const char *msg = "Filename invalido";
@@ -205,38 +209,6 @@ static void handle_wrq(int sock, int idx, const pdu_t *pdu) {
     resp.data_len = 0;
     printf("[SERVER] WRQ OK de cliente %d, archivo='%s'\n",
            idx, clients[idx].filename);
-
-    (void)send_pdu(sock, &clients[idx].addr, &resp);
-}
-
-static void handle_data(int sock, int idx, const pdu_t *pdu) {
-    if (clients[idx].state != STATE_TRANSFER || !clients[idx].fp) {
-        fprintf(stderr, "[SERVER] DATA fuera de fase, descarto\n");
-        return; // según enunciado: descartar silenciosamente (o log)
-    }
-
-    pdu_t resp = {0};
-    resp.type = TYPE_ACK;
-    resp.seq  = pdu->seq; // ACK eco del seq recibido válido
-
-    if (pdu->seq != clients[idx].expected_seq) {
-        // Duplicado o seq incorrecto → registramos y podemos reenviar último ACK
-        fprintf(stderr, "[SERVER] DATA con seq inesperado (recibí %u, esperaba %u)\n",
-                pdu->seq, clients[idx].expected_seq);
-        // En un protocolo más completo podríamos re-ACKear el último seq válido
-        // Por simplicidad, acá solo logueamos y re-ACKeamos este.
-    } else {
-        // Es el bloque esperado → escribir
-        size_t written = fwrite(pdu->data, 1, pdu->data_len, clients[idx].fp);
-        if (written != pdu->data_len) {
-            perror("fwrite");
-            // Podrías enviar error en payload, pero el enunciado dice descartar
-        }
-        // Alterno el esperado
-        clients[idx].expected_seq ^= 1;
-        printf("[SERVER] DATA OK cliente %d, seq=%u, bytes=%zu\n",
-               idx, pdu->seq, pdu->data_len);
-    }
 
     (void)send_pdu(sock, &clients[idx].addr, &resp);
 }
