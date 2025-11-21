@@ -15,7 +15,7 @@ TYPE_ACK   = 4
 TYPE_FIN   = 5
 
 MAX_PDU_SIZE = 1500
-CREDENTIAL = b"g17-d111"  # misma que EXPECTED_CREDENTIAL en server.c
+CREDENTIAL = b"g17-d111"  # misma que VALID_CREDENTIAL en server.c
 
 
 def send_pdu(sock: socket.socket, addr, pdu_type: int, seq: int, payload: bytes = b""):

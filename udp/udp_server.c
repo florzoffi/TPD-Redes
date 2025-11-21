@@ -143,14 +143,20 @@ static void handle_hello(int sock, int idx, const pdu_t *pdu) {
     resp.type = TYPE_ACK;
     resp.seq  = pdu->seq;
 
-    // Validar credencial
-    const char *cred_rcv = (const char *)pdu->data;
-    if (pdu->data_len == 0 ||
-        strcmp(cred_rcv, VALID_CREDENTIAL) != 0) {
+    const char *error_msg = NULL;
 
-        const char *msg = "Credencial invalida";
-        size_t msg_len = strlen(msg);
-        memcpy(resp.data, msg, msg_len);
+    // La credencial esperada es "TEST"
+    size_t expected_len = strlen(VALID_CREDENTIAL);
+
+    // Debe tener exactamente ese largo y coincidir byte a byte
+    if (pdu->data_len != expected_len ||
+        memcmp(pdu->data, VALID_CREDENTIAL, expected_len) != 0) {
+        error_msg = "Credencial invalida";
+    }
+
+    if (error_msg != NULL) {
+        size_t msg_len = strlen(error_msg);
+        memcpy(resp.data, error_msg, msg_len);
         resp.data_len = msg_len;
         printf("[SERVER] HELLO inválido de cliente %d\n", idx);
     } else {
@@ -162,6 +168,7 @@ static void handle_hello(int sock, int idx, const pdu_t *pdu) {
 
     (void)send_pdu(sock, &clients[idx].addr, &resp);
 }
+
 
 static void handle_wrq(int sock, int idx, const pdu_t *pdu) {
     pdu_t resp = {0};

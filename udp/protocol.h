@@ -12,8 +12,8 @@
 #define FILENAME_MIN_LEN 4
 #define FILENAME_MAX_LEN 10
 
-#define MAX_RETRIES 5
-#define TIMEOUT_MS 500
+#define MAX_RETRIES 15
+#define TIMEOUT_MS 3000
 
 typedef struct {
     uint8_t type;

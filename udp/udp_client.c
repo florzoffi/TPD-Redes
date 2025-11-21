@@ -136,11 +136,13 @@ static int fase_hello(int sock,
     pdu.type = TYPE_HELLO;
     pdu.seq  = *seq; // debería ser 0
 
-    size_t cred_len = strlen(credential) + 1; // mando con '\0'
-    if (cred_len > MAX_DATA_SIZE) {
-        fprintf(stderr, "Credencial demasiado larga\n");
+    // Enviamos la credencial SIN '\0'
+    size_t cred_len = strlen(credential);
+    if (cred_len == 0 || cred_len > MAX_DATA_SIZE) {
+        fprintf(stderr, "Credencial demasiado larga o vacía\n");
         return -1;
     }
+
     memcpy(pdu.data, credential, cred_len);
     pdu.data_len = cred_len;
 
@@ -157,7 +159,6 @@ static int fase_hello(int sock,
     }
 
     printf("[CLIENT] HELLO ok\n");
-    // Stop & wait: solo incremento (toggle) si no hubo retransmisión final
     *seq ^= 1;
     return 0;
 }
@@ -166,18 +167,17 @@ static int fase_wrq(int sock,
                     struct sockaddr_in *server_addr,
                     const char *remote_filename,
                     uint8_t *seq) {
-    size_t len = strlen(remote_filename);
-    if (len < FILENAME_MIN_LEN || len > FILENAME_MAX_LEN) {
-        fprintf(stderr, "Filename inválido (debe tener entre %d y %d chars)\n",
-                FILENAME_MIN_LEN, FILENAME_MAX_LEN);
-        return -1;
-    }
-
     pdu_t pdu = {0};
     pdu.type = TYPE_WRQ;
     pdu.seq  = *seq; // debería ser 1
 
-    size_t fn_len = len + 1; // mando con '\0'
+    // Enviamos filename como string null-terminated, sin validar largo aquí.
+    size_t fn_len = strlen(remote_filename) + 1;
+    if (fn_len > MAX_DATA_SIZE) {
+        fprintf(stderr, "Filename demasiado largo para WRQ\n");
+        return -1;
+    }
+
     memcpy(pdu.data, remote_filename, fn_len);
     pdu.data_len = fn_len;
 
