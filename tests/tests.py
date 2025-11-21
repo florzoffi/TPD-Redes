@@ -1187,6 +1187,247 @@ def test_wrq_non_ascii_filename(server_bin: Path, client_bin: Path, ctx: TestCon
     print(f"    {DIM}Filename no ASCII correctamente rechazado (sin archivo creado).{RESET}")
     return True
 
+def test_bad_credential_shows_user_message(server_bin: Path, client_bin: Path, ctx: TestContext) -> bool:
+    """
+    Igual que T3, pero además chequea que el cliente muestre *algún* mensaje
+    de error al usuario (stdout o stderr no vacíos).
+    """
+    test_id = "T19_bad_credential_msg"
+    print(f"{BLUE}{test_id}{RESET} Mensaje de error visible para credencial inválida")
+
+    local = DATA_DIR / "small.txt"
+    remote_name = "t19_badmsg.dat"
+    remote = ROOT / remote_name
+    if remote.exists():
+        remote.unlink()
+
+    with ServerProcess(server_bin) as sp:
+        rc, out, err = run_client(
+            client_bin,
+            "127.0.0.1",
+            "BAD",
+            local,
+            remote_name,
+        )
+        out_s, err_s = sp.finalize()
+
+    # No debe crear archivo
+    if remote.exists():
+        print(f"{RED}[FAIL]{RESET} Se creó archivo remoto pese a credencial inválida ({remote})")
+        ctx.to_cleanup.add(remote)
+        return False
+
+    # Debe fallar
+    if rc == 0:
+        print(f"{RED}[FAIL]{RESET} Cliente terminó con exit=0 usando credencial inválida")
+        print("=== CLIENTE STDOUT ===")
+        print(out)
+        print("=== CLIENTE STDERR ===")
+        print(err)
+        print("=== SERVER STDOUT ===")
+        print(out_s)
+        print("=== SERVER STDERR ===")
+        print(err_s)
+        return False
+
+    # Debe mostrar ALGÚN mensaje al usuario
+    combined = (out + err).strip()
+    if not combined:
+        print(f"{RED}[FAIL]{RESET} Credencial inválida pero el cliente no mostró ningún mensaje.")
+        print("=== SERVER STDOUT ===")
+        print(out_s)
+        print("=== SERVER STDERR ===")
+        print(err_s)
+        return False
+
+    print(f"    {DIM}Credencial inválida con mensaje visible para el usuario (stdout/stderr no vacíos).{RESET}")
+    return True
+
+
+def test_wrq_min_length_filename_ok(server_bin: Path, client_bin: Path, ctx: TestContext) -> bool:
+    """
+    Filename de longitud mínima válida (4 caracteres ASCII).
+    Debe ser aceptado y transferir correctamente.
+    """
+    test_id = "T20_wrq_min_length_ok"
+    print(f"{BLUE}{test_id}{RESET} Filename longitud mínima (4 chars) aceptado")
+
+    local = DATA_DIR / "small.txt"
+    remote_name = "abcd"   # 4 chars, todo ASCII
+    remote = ROOT / remote_name
+    if remote.exists():
+        remote.unlink()
+
+    with ServerProcess(server_bin) as sp:
+        rc, out, err = run_client(
+            client_bin,
+            "127.0.0.1",
+            "g17-d111",
+            local,
+            remote_name,
+        )
+        out_s, err_s = sp.finalize()
+
+    if rc != 0:
+        print(f"{RED}[FAIL]{RESET} Cliente falló con filename mínimo válido (exit={rc})")
+        print("=== CLIENTE STDOUT ===")
+        print(out)
+        print("=== CLIENTE STDERR ===")
+        print(err)
+        print("=== SERVER STDOUT ===")
+        print(out_s)
+        print("=== SERVER STDERR ===")
+        print(err_s)
+        return False
+
+    if not remote.exists():
+        print(f"{RED}[FAIL]{RESET} No se creó archivo remoto para filename mínimo ({remote})")
+        return False
+
+    ok = ctx.record_checksum(test_id, "min_len_ok", local, remote)
+    return ok
+
+
+def test_wrq_max_length_filename_ok(server_bin: Path, client_bin: Path, ctx: TestContext) -> bool:
+    """
+    Filename de longitud máxima válida (10 caracteres ASCII).
+    Debe ser aceptado y transferir correctamente.
+    """
+    test_id = "T21_wrq_max_length_ok"
+    print(f"{BLUE}{test_id}{RESET} Filename longitud máxima (10 chars) aceptado")
+
+    local = DATA_DIR / "small.txt"
+    remote_name = "1234567890"  # 10 chars ASCII
+    remote = ROOT / remote_name
+    if remote.exists():
+        remote.unlink()
+
+    with ServerProcess(server_bin) as sp:
+        rc, out, err = run_client(
+            client_bin,
+            "127.0.0.1",
+            "g17-d111",
+            local,
+            remote_name,
+        )
+        out_s, err_s = sp.finalize()
+
+    if rc != 0:
+        print(f"{RED}[FAIL]{RESET} Cliente falló con filename máximo válido (exit={rc})")
+        print("=== CLIENTE STDOUT ===")
+        print(out)
+        print("=== CLIENTE STDERR ===")
+        print(err)
+        print("=== SERVER STDOUT ===")
+        print(out_s)
+        print("=== SERVER STDERR ===")
+        print(err_s)
+        return False
+
+    if not remote.exists():
+        print(f"{RED}[FAIL]{RESET} No se creó archivo remoto para filename máximo ({remote})")
+        return False
+
+    ok = ctx.record_checksum(test_id, "max_len_ok", local, remote)
+    return ok
+
+
+def test_fin_wrong_filename(server_bin: Path, client_bin: Path, ctx: TestContext) -> bool:
+    """
+    FIN con filename distinto al del WRQ.
+
+    Este test asume que bad_client.py tiene un modo 'fin_wrong_filename' que:
+      - envía HELLO válido
+      - envía WRQ válido con <remote_ok_name>
+      - envía uno o más DATA correctos
+      - termina con FIN cuyo filename NO coincide (usa <remote_wrong_name>)
+
+    Esperado:
+      - El archivo <remote_ok_name> debe existir e igual al local.
+      - NO debe aparecer archivo <remote_wrong_name>.
+    """
+    test_id = "T22_fin_wrong_filename"
+    print(f"{BLUE}{test_id}{RESET} FIN con filename distinto al WRQ")
+
+    bad_client_script = TESTS_DIR / "bad_client.py"
+    if not bad_client_script.is_file():
+        print(f"{YELLOW}[WARN]{RESET} bad_client.py no encontrado en {bad_client_script}")
+        return False
+
+    local = DATA_DIR / "small.txt"
+
+    remote_ok_name = "t22finok.bin"
+    remote_wrong_name = "t22finwrong.bin"
+
+    remote_ok = ROOT / remote_ok_name
+    remote_wrong = ROOT / remote_wrong_name
+
+    # Limpiar archivos previos
+    for r in (remote_ok, remote_wrong):
+        if r.exists():
+            r.unlink()
+
+    with ServerProcess(server_bin) as sp:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(bad_client_script),
+                "127.0.0.1",
+                "--mode",
+                "fin_wrong_filename",
+                "--remote-ok",
+                remote_ok_name,
+                "--remote-wrong",
+                remote_wrong_name,
+                "--local-file",
+                str(local),
+            ],
+            cwd=TESTS_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=10,
+        )
+        out_bad = proc.stdout
+        err_bad = proc.stderr
+
+        out_s, err_s = sp.finalize()
+
+    # 1) El archivo "bueno" debe existir e igual al local
+    if not remote_ok.exists():
+        print(f"{RED}[FAIL]{RESET} No se creó archivo remoto esperado ({remote_ok})")
+        print("=== BAD_CLIENT STDOUT ===")
+        print(out_bad)
+        print("=== BAD_CLIENT STDERR ===")
+        print(err_bad)
+        print("=== SERVER STDOUT ===")
+        print(out_s)
+        print("=== SERVER STDERR ===")
+        print(err_s)
+        return False
+
+    ok_data = ctx.record_checksum(test_id, "fin_wrong_filename_okfile", local, remote_ok)
+
+    # 2) El archivo con nombre del FIN equivocado NO debe existir
+    if remote_wrong.exists():
+        print(f"{RED}[FAIL]{RESET} Se creó archivo remoto con filename erróneo en FIN ({remote_wrong})")
+        ctx.to_cleanup.add(remote_wrong)
+        print("=== BAD_CLIENT STDOUT ===")
+        print(out_bad)
+        print("=== BAD_CLIENT STDERR ===")
+        print(err_bad)
+        print("=== SERVER STDOUT ===")
+        print(out_s)
+        print("=== SERVER STDERR ===")
+        print(err_s)
+        return False
+
+    if not ok_data:
+        return False
+
+    print(f"    {DIM}FIN con filename distinto manejado correctamente (archivo bueno OK, archivo errado ausente).{RESET}")
+    return True
+
 
 TESTS = [
     ("T1_small_file",              test_small_file),
@@ -1207,4 +1448,8 @@ TESTS = [
     ("T16_wrq_long_filename",      test_wrq_long_filename),
     ("T17_many_small_clients_stress", test_many_small_clients_stress),
     ("T18_wrq_non_ascii_filename",    test_wrq_non_ascii_filename),
+    ("T19_bad_credential_msg",        test_bad_credential_shows_user_message),
+    ("T20_wrq_min_length_ok",         test_wrq_min_length_filename_ok),
+    ("T21_wrq_max_length_ok",         test_wrq_max_length_filename_ok),
+    ("T22_fin_wrong_filename",        test_fin_wrong_filename),
 ]

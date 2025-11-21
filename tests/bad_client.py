@@ -98,13 +98,48 @@ def mode_data_without_wrq(sock, addr, local_path: Path):
     print("[BAD_CLIENT] Mando DATA sin HELLO ni WRQ")
     time.sleep(0.1)
 
+def mode_fin_wrong_filename(sock, addr, remote_ok: str, remote_wrong: str, local_path: Path):
+    """
+    Envía:
+      - HELLO correcto
+      - WRQ correcto usando remote_ok
+      - DATA correcto
+      - FIN con filename incorrecto (remote_wrong)
+    """
+    # HELLO
+    send_pdu(sock, addr, TYPE_HELLO, 0, CREDENTIAL)
+    seq, payload = wait_ack(sock, addr, TYPE_ACK, 0, timeout=1.0)
+    if seq is None:
+        print("[BAD_CLIENT] HELLO rechazado o sin ACK")
+        return
+
+    # WRQ correcto
+    fn_bytes = remote_ok.encode("ascii", errors="strict") + b"\x00"
+    send_pdu(sock, addr, TYPE_WRQ, 1, fn_bytes)
+    seq, payload = wait_ack(sock, addr, TYPE_ACK, 1, timeout=1.0)
+    if seq is None:
+        print("[BAD_CLIENT] WRQ rechazado o sin ACK")
+        return
+
+    # DATA correcto seq=0
+    data = local_path.read_bytes()
+    chunk = data[:512]
+    send_pdu(sock, addr, TYPE_DATA, 0, chunk)
+    seq, payload = wait_ack(sock, addr, TYPE_ACK, 0, timeout=1.0)
+    # Si no hay ACK igual seguimos, no importa mucho
+
+    # FIN INCORRECTO
+    bad_fn = remote_wrong.encode("ascii", errors="replace") + b"\x00"
+    send_pdu(sock, addr, TYPE_FIN, 1, bad_fn)
+    print(f"[BAD_CLIENT] FIN malformado enviado (filename '{remote_wrong}')")
+
 
 def main():
     parser = argparse.ArgumentParser(description="Cliente UDP 'malo' para testear el server C.")
     parser.add_argument("server_ip", type=str, help="IP del servidor C (ej. 127.0.0.1)")
     parser.add_argument(
         "--mode",
-        choices=["bad_seq_order", "wrq_without_hello", "data_without_wrq"],
+        choices=["bad_seq_order", "wrq_without_hello", "data_without_wrq", "fin_wrong_filename"],
         required=True,
         help="Tipo de comportamiento incorrecto a generar.",
     )
@@ -120,6 +155,18 @@ def main():
         default=None,
         help="Archivo local (para modos que envían DATA).",
     )
+
+    parser.add_argument(
+        "--remote-ok",
+        type=str,
+        help="Nombre remoto correcto para WRQ."
+    )
+    parser.add_argument(
+        "--remote-wrong",
+        type=str,
+        help="Nombre remoto ERRÓNEO para el FIN."
+    )
+
 
     args = parser.parse_args()
     addr = (args.server_ip, SERVER_PORT)
@@ -145,6 +192,12 @@ def main():
                 print("[BAD_CLIENT] --local-file es obligatorio en mode=data_without_wrq")
                 sys.exit(1)
             mode_data_without_wrq(sock, addr, local_path)
+        elif args.mode == "fin_wrong_filename":
+            if args.remote_ok is None or args.remote_wrong is None or local_path is None:
+                print("[BAD_CLIENT] --remote-ok, --remote-wrong y --local-file son obligatorios para fin_wrong_filename")
+                sys.exit(1)
+            mode_fin_wrong_filename(sock, addr, args.remote_ok, args.remote_wrong, local_path)
+
     finally:
         sock.close()
 
