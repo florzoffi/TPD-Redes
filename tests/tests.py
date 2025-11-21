@@ -204,7 +204,7 @@ def test_small_file(server_bin: Path, client_bin: Path, ctx: TestContext) -> boo
         remote.unlink()
 
     with ServerProcess(server_bin) as sp:
-        rc, out, err = run_client(client_bin, "127.0.0.1", "TEST", local, remote_name)
+        rc, out, err = run_client(client_bin, "127.0.0.1", "g17-d111", local, remote_name)
         if rc != 0:
             out_s, err_s = sp.finalize()
             print(f"{RED}Cliente terminó con código {rc}{RESET}")
@@ -241,7 +241,7 @@ def test_many_clients_parallel(server_bin: Path, client_bin: Path, ctx: TestCont
                 [
                     str(client_bin),
                     "127.0.0.1",
-                    "TEST",
+                    "g17-d111",
                     str(sources[i]),
                     remote_names[i],
                 ],
@@ -337,7 +337,7 @@ def test_mixed_credentials_concurrent(server_bin: Path, client_bin: Path, ctx: T
             [
                 str(client_bin),
                 "127.0.0.1",
-                "TEST",
+                "g17-d111",
                 str(src_ok),
                 remote_ok_name,
             ],
@@ -404,7 +404,7 @@ def test_partial_block_file(server_bin: Path, client_bin: Path, ctx: TestContext
         remote.unlink()
 
     with ServerProcess(server_bin) as sp:
-        rc, out, err = run_client(client_bin, "127.0.0.1", "TEST", local, remote_name)
+        rc, out, err = run_client(client_bin, "127.0.0.1", "g17-d111", local, remote_name)
         if rc != 0:
             out_s, err_s = sp.finalize()
             print(f"{RED}Cliente falló (exit={rc}) en archivo parcial{RESET}")
@@ -438,7 +438,7 @@ def test_repeated_small_file(server_bin: Path, client_bin: Path, ctx: TestContex
                 remote.unlink()
 
             print(f"    {DIM}Ejecución {i}/{runs}{RESET}")
-            rc, out, err = run_client(client_bin, "127.0.0.1", "TEST", local, remote_name)
+            rc, out, err = run_client(client_bin, "127.0.0.1", "g17-d111", local, remote_name)
             if rc != 0:
                 out_s, err_s = sp.finalize()
                 print(f"{RED}Cliente falló en ejecución {i} (exit={rc}){RESET}")
@@ -481,7 +481,7 @@ def test_mixed_sizes_parallel(server_bin: Path, client_bin: Path, ctx: TestConte
             [
                 str(client_bin),
                 "127.0.0.1",
-                "TEST",
+                "g17-d111",
                 str(small_local),
                 small_remote_name,
             ],
@@ -494,7 +494,7 @@ def test_mixed_sizes_parallel(server_bin: Path, client_bin: Path, ctx: TestConte
             [
                 str(client_bin),
                 "127.0.0.1",
-                "TEST",
+                "g17-d111",
                 str(big_local),
                 big_remote_name,
             ],
@@ -578,7 +578,7 @@ def test_bad_server_drop_ack(server_bin: Path, client_bin: Path, ctx: TestContex
         rc, out, err = run_client(
             client_bin,
             "127.0.0.1",
-            "TEST",
+            "g17-d111",
             local,
             remote_name,
             timeout=90,
@@ -721,7 +721,7 @@ def test_bad_server_delay_ack(server_bin: Path, client_bin: Path, ctx: TestConte
         rc, out, err = run_client(
             client_bin,
             "127.0.0.1",
-            "TEST",
+            "g17-d111",
             local,
             remote_name,
             timeout=120,
@@ -793,7 +793,7 @@ def test_bad_server_wrong_ack_seq(server_bin: Path, client_bin: Path, ctx: TestC
         rc, out, err = run_client(
             client_bin,
             "127.0.0.1",
-            "TEST",
+            "g17-d111",
             local,
             remote_name,
             timeout=90,
@@ -1004,7 +1004,7 @@ def test_wrq_short_filename(server_bin: Path, client_bin: Path, ctx: TestContext
         rc, out, err = run_client(
             client_bin,
             "127.0.0.1",
-            "TEST",
+            "g17-d111",
             local,
             remote_name,
         )
@@ -1045,7 +1045,7 @@ def test_wrq_long_filename(server_bin: Path, client_bin: Path, ctx: TestContext)
         rc, out, err = run_client(
             client_bin,
             "127.0.0.1",
-            "TEST",
+            "g17-d111",
             local,
             remote_name,
         )
