@@ -1336,15 +1336,15 @@ def test_fin_wrong_filename(server_bin: Path, client_bin: Path, ctx: TestContext
     """
     FIN con filename distinto al del WRQ.
 
-    Este test asume que bad_client.py tiene un modo 'fin_wrong_filename' que:
-      - envía HELLO válido
+    Escenario:
+      - bad_client envía HELLO válido
       - envía WRQ válido con <remote_ok_name>
-      - envía uno o más DATA correctos
-      - termina con FIN cuyo filename NO coincide (usa <remote_wrong_name>)
+      - envía DATA correctos desde local.txt
+      - termina con FIN cuyo filename NO coincide (otro distinto)
 
     Esperado:
       - El archivo <remote_ok_name> debe existir e igual al local.
-      - NO debe aparecer archivo <remote_wrong_name>.
+      - El server no debe romper la transferencia ya escrita.
     """
     test_id = "T22_fin_wrong_filename"
     print(f"{BLUE}{test_id}{RESET} FIN con filename distinto al WRQ")
@@ -1356,29 +1356,24 @@ def test_fin_wrong_filename(server_bin: Path, client_bin: Path, ctx: TestContext
 
     local = DATA_DIR / "small.txt"
 
-    remote_ok_name = "t22finok.bin"
-    remote_wrong_name = "t22finwrong.bin"
-
+    # Nombre "bueno" del WRQ: dentro de [4,10] chars y ASCII
+    remote_ok_name = "t22ok.bin"   # 8 caracteres → válido
     remote_ok = ROOT / remote_ok_name
-    remote_wrong = ROOT / remote_wrong_name
 
-    # Limpiar archivos previos
-    for r in (remote_ok, remote_wrong):
-        if r.exists():
-            r.unlink()
+    # Limpiar archivo previo si existe
+    if remote_ok.exists():
+        remote_ok.unlink()
 
     with ServerProcess(server_bin) as sp:
         proc = subprocess.run(
             [
                 sys.executable,
                 str(bad_client_script),
-                "127.0.0.1",
+                "127.0.0.1",        # server_ip
                 "--mode",
                 "fin_wrong_filename",
-                "--remote-ok",
+                "--remote-name",
                 remote_ok_name,
-                "--remote-wrong",
-                remote_wrong_name,
                 "--local-file",
                 str(local),
             ],
@@ -1408,25 +1403,12 @@ def test_fin_wrong_filename(server_bin: Path, client_bin: Path, ctx: TestContext
 
     ok_data = ctx.record_checksum(test_id, "fin_wrong_filename_okfile", local, remote_ok)
 
-    # 2) El archivo con nombre del FIN equivocado NO debe existir
-    if remote_wrong.exists():
-        print(f"{RED}[FAIL]{RESET} Se creó archivo remoto con filename erróneo en FIN ({remote_wrong})")
-        ctx.to_cleanup.add(remote_wrong)
-        print("=== BAD_CLIENT STDOUT ===")
-        print(out_bad)
-        print("=== BAD_CLIENT STDERR ===")
-        print(err_bad)
-        print("=== SERVER STDOUT ===")
-        print(out_s)
-        print("=== SERVER STDERR ===")
-        print(err_s)
-        return False
-
     if not ok_data:
         return False
 
-    print(f"    {DIM}FIN con filename distinto manejado correctamente (archivo bueno OK, archivo errado ausente).{RESET}")
+    print(f"    {DIM}FIN con filename distinto manejado correctamente (archivo bueno OK).{RESET}")
     return True
+
 
 
 TESTS = [

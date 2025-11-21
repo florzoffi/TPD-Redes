@@ -192,10 +192,35 @@ def main():
                 print("[BAD_CLIENT] --local-file es obligatorio en mode=data_without_wrq")
                 sys.exit(1)
             mode_data_without_wrq(sock, addr, local_path)
-        elif args.mode == "fin_wrong_filename":
-            if args.remote_ok is None or args.remote_wrong is None or local_path is None:
-                print("[BAD_CLIENT] --remote-ok, --remote-wrong y --local-file son obligatorios para fin_wrong_filename")
-                sys.exit(1)
+            
+        elif not args.remote_name or not args.local_file:
+            parser.error("modo fin_wrong_filename requiere --remote-name y --local-file")
+
+            remote_ok = args.remote_name
+            local_path = args.local_file
+
+            # Podés construir cualquier nombre "malo" distinto.
+            # No importa la longitud porque sólo se usa en FIN y el server no crea archivo nuevo con esto.
+            wrong_name = "X" + remote_ok
+
+            # Crear socket y armar dirección de server (usa el mismo esquema que tus otros modos)
+            sock = socket.socket(socket.AF_INET, SOCK_DGRAM)
+            server_addr = (args.server_ip, SERVER_PORT)
+
+            # 1) HELLO válido
+            send_hello(sock, server_addr, b"g17-d111")
+
+            # 2) WRQ con filename correcto (remote_ok)
+            send_wrq(sock, server_addr, remote_ok.encode("ascii"))
+
+            # 3) DATA "normal" con el archivo local (podés reutilizar tu lógica de envío por bloques)
+            send_file_data(sock, server_addr, local_path)
+
+            # 4) FIN con filename incorrecto
+            send_fin(sock, server_addr, wrong_name.encode("ascii"))
+
+            sock.close()
+
             mode_fin_wrong_filename(sock, addr, args.remote_ok, args.remote_wrong, local_path)
 
     finally:
