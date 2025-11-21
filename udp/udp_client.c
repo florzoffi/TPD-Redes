@@ -13,7 +13,6 @@
 
 #include "protocol.h"
 
-// ---------- helpers de PDU (serializar / deserializar) ----------
 
 static int send_pdu(int sock,
                     const struct sockaddr_in *addr,
@@ -46,11 +45,9 @@ static int recv_pdu(int sock,
     ssize_t n = recvfrom(sock, buffer, sizeof(buffer), 0,
                          (struct sockaddr *)addr, &addrlen);
     if (n < 0) {
-        // timeout u otro error
         return -1;
     }
     if (n < 2) {
-        // paquete inválido
         return -1;
     }
 
@@ -74,8 +71,6 @@ static void set_socket_timeout(int sock, int timeout_ms) {
     }
 }
 
-// Envía una PDU y espera un ACK con type=TYPE_ACK y seq esperado
-// con reintentos y timeout
 static int send_and_wait_ack(int sock,
                              struct sockaddr_in *server_addr,
                              const pdu_t *to_send,
@@ -86,17 +81,14 @@ static int send_and_wait_ack(int sock,
             return -1;
         }
 
-        // Esperar ACK
         pdu_t recv_p;
         struct sockaddr_in from;
         int r = recv_pdu(sock, &from, &recv_p);
         if (r < 0) {
-            // timeout u otro error → reintentar
             fprintf(stderr, "[CLIENT] Timeout o error esperando ACK (intento %d)\n", attempt + 1);
             continue;
         }
 
-        // Filtrar: que venga del mismo server (dirección + puerto)
         if (from.sin_addr.s_addr != server_addr->sin_addr.s_addr ||
             from.sin_port        != server_addr->sin_port) {
             fprintf(stderr, "[CLIENT] Paquete de origen desconocido, ignorado\n");
@@ -111,11 +103,9 @@ static int send_and_wait_ack(int sock,
         if (recv_p.seq != expected_ack_seq) {
             fprintf(stderr, "[CLIENT] ACK con seq incorrecto (recibí %u, esperaba %u)\n",
                     recv_p.seq, expected_ack_seq);
-            // ignorar y reintentar
             continue;
         }
 
-        // ACK correcto 👍
         if (ack_out) {
             *ack_out = recv_p;
         }
@@ -126,7 +116,6 @@ static int send_and_wait_ack(int sock,
     return -1;
 }
 
-// ---------- Fases del protocolo ----------
 
 static int fase_hello(int sock,
                       struct sockaddr_in *server_addr,
@@ -134,9 +123,8 @@ static int fase_hello(int sock,
                       uint8_t *seq) {
     pdu_t pdu = {0};
     pdu.type = TYPE_HELLO;
-    pdu.seq  = *seq; // debería ser 0
+    pdu.seq  = *seq; 
 
-    // Enviamos la credencial SIN '\0'
     size_t cred_len = strlen(credential);
     if (cred_len == 0 || cred_len > MAX_DATA_SIZE) {
         fprintf(stderr, "Credencial demasiado larga o vacía\n");
@@ -152,7 +140,6 @@ static int fase_hello(int sock,
     }
 
     if (ack.data_len > 0) {
-        // Server mandó mensaje de error
         fprintf(stderr, "[CLIENT] Error en HELLO: %.*s\n",
                 (int)ack.data_len, ack.data);
         return -1;
@@ -169,9 +156,7 @@ static int fase_wrq(int sock,
                     uint8_t *seq) {
     pdu_t pdu = {0};
     pdu.type = TYPE_WRQ;
-    pdu.seq  = *seq; // debería ser 1
-
-    // Enviamos filename como string null-terminated, sin validar largo aquí.
+    pdu.seq  = *seq; 
     size_t fn_len = strlen(remote_filename) + 1;
     if (fn_len > MAX_DATA_SIZE) {
         fprintf(stderr, "Filename demasiado largo para WRQ\n");
@@ -193,7 +178,7 @@ static int fase_wrq(int sock,
     }
 
     printf("[CLIENT] WRQ ok\n");
-    *seq ^= 1; // ahora el próximo DATA arranca en 0
+    *seq ^= 1; 
     return 0;
 }
 
@@ -210,14 +195,12 @@ static int fase_data(int sock,
         pdu.seq  = *seq;
         pdu.data_len = n;
 
-        printf("[CLIENT] Enviando DATA seq=%u, bytes=%zu\n", pdu.seq, n);
 
         if (send_and_wait_ack(sock, server_addr, &pdu, *seq, &ack) < 0) {
             return -1;
         }
 
-        printf("[CLIENT] ACK OK para seq=%u\n", *seq);
-        *seq ^= 1; // alterno 0/1 solo si ACK fue correcto
+        *seq ^= 1; 
     }
 
     if (ferror(fp)) {
@@ -225,7 +208,6 @@ static int fase_data(int sock,
         return -1;
     }
 
-    printf("[CLIENT] Fase DATA completada\n");
     return 0;
 }
 
@@ -261,7 +243,6 @@ static int fase_fin(int sock,
     return 0;
 }
 
-// ---------- main ----------
 
 int main(int argc, char *argv[]) {
     if (argc != 5) {

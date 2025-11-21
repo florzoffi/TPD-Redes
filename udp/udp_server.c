@@ -25,14 +25,13 @@ typedef struct {
     int used;
     struct sockaddr_in addr;
     client_state_e state;
-    uint8_t expected_seq;                   // para DATA
+    uint8_t expected_seq;                  
     FILE *fp;
     char filename[FILENAME_MAX_LEN + 1];
 } client_t;
 
 static client_t clients[MAX_CLIENTS];
 
-// Prototipos de handlers
 static void handle_hello(int sock, int idx, const pdu_t *pdu);
 static void handle_wrq  (int sock, int idx, const pdu_t *pdu);
 static void handle_data (int sock, int idx, const pdu_t *pdu);
@@ -41,7 +40,6 @@ static void handle_fin  (int sock, int idx, const pdu_t *pdu);
 static const char *VALID_CREDENTIAL = "g17-d111";
 
 
-// ---------- helpers ----------
 
 static int addr_equals(const struct sockaddr_in *a,
                        const struct sockaddr_in *b) {
@@ -63,7 +61,7 @@ static int find_or_create_client(const struct sockaddr_in *addr) {
     }
 
     if (free_idx == -1) {
-        return -1; // no hay lugar
+        return -1; 
     }
 
     clients[free_idx].used = 1;
@@ -136,7 +134,6 @@ static int recv_pdu(int sock,
     return 0;
 }
 
-// ---------- handlers de fases ----------
 
 static void handle_hello(int sock, int idx, const pdu_t *pdu) {
     pdu_t resp = {0};
@@ -145,10 +142,8 @@ static void handle_hello(int sock, int idx, const pdu_t *pdu) {
 
     const char *error_msg = NULL;
 
-    // La credencial esperada es "TEST"
     size_t expected_len = strlen(VALID_CREDENTIAL);
 
-    // Debe tener exactamente ese largo y coincidir byte a byte
     if (pdu->data_len != expected_len ||
         memcmp(pdu->data, VALID_CREDENTIAL, expected_len) != 0) {
         error_msg = "Credencial invalida";
@@ -160,7 +155,6 @@ static void handle_hello(int sock, int idx, const pdu_t *pdu) {
         resp.data_len = msg_len;
         printf("[SERVER] HELLO inválido de cliente %d\n", idx);
     } else {
-        // credencial OK → pasar a WAIT_WRQ
         clients[idx].state = STATE_WAIT_WRQ;
         resp.data_len = 0;
         printf("[SERVER] HELLO OK de cliente %d\n", idx);
@@ -175,7 +169,6 @@ static void handle_wrq(int sock, int idx, const pdu_t *pdu) {
     resp.type = TYPE_ACK;
     resp.seq  = pdu->seq;
 
-    // Validar que esté en el estado correcto
     if (clients[idx].state != STATE_WAIT_WRQ) {
         const char *msg = "WRQ fuera de fase";
         memcpy(resp.data, msg, strlen(msg));
@@ -186,7 +179,6 @@ static void handle_wrq(int sock, int idx, const pdu_t *pdu) {
 
     const char *filename = (const char *)pdu->data;
 
-    // 🔧 Reemplazo de strnlen: calculo largo a mano, pero máximo FILENAME_MAX_LEN+2
     size_t len = 0;
     while (len < FILENAME_MAX_LEN + 2 && filename[len] != '\0') {
         len++;
@@ -203,7 +195,6 @@ static void handle_wrq(int sock, int idx, const pdu_t *pdu) {
     strncpy(clients[idx].filename, filename, FILENAME_MAX_LEN);
     clients[idx].filename[FILENAME_MAX_LEN] = '\0';
 
-    // Abrimos archivo para escritura (modo binario)
     if (clients[idx].fp) {
         fclose(clients[idx].fp);
     }
@@ -249,7 +240,6 @@ static void handle_fin(int sock, int idx, const pdu_t *pdu) {
         return;
     }
 
-    // Cerrar archivo y liberar cliente
     if (clients[idx].fp) {
         fclose(clients[idx].fp);
         clients[idx].fp = NULL;
@@ -266,32 +256,27 @@ static void handle_fin(int sock, int idx, const pdu_t *pdu) {
 
 static void handle_data(int sock, int idx, const pdu_t *pdu) {
     if (clients[idx].state != STATE_TRANSFER || !clients[idx].fp) {
-        fprintf(stderr, "[SERVER] DATA fuera de fase, descarto\n");
-        return; // según enunciado: descartar silenciosamente (o log)
+        return; 
     }
 
     pdu_t resp = {0};
     resp.type = TYPE_ACK;
-    resp.seq  = pdu->seq; // ACK eco del seq recibido válido
+    resp.seq  = pdu->seq; 
 
     if (pdu->seq != clients[idx].expected_seq) {
         fprintf(stderr, "[SERVER] DATA con seq inesperado (recibí %u, esperaba %u)\n",
                 pdu->seq, clients[idx].expected_seq);
-        // Podrías re-ACKear el último válido; acá solo logueamos
     } else {
         size_t written = fwrite(pdu->data, 1, pdu->data_len, clients[idx].fp);
         if (written != pdu->data_len) {
             perror("fwrite");
         }
         clients[idx].expected_seq ^= 1;
-        printf("[SERVER] DATA OK cliente %d, seq=%u, bytes=%zu\n",
-               idx, pdu->seq, pdu->data_len);
     }
 
     (void)send_pdu(sock, &clients[idx].addr, &resp);
 }
 
-// ---------- main ----------
 
 int main(void) {
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -321,7 +306,6 @@ int main(void) {
         pdu_t pdu;
 
         if (recv_pdu(sock, &cli_addr, &pdu) < 0) {
-            // error ya logueado
             continue;
         }
 
