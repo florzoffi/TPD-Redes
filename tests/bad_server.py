@@ -84,7 +84,7 @@ def main():
     parser.add_argument(
         "--expected-credential",
         type=str,
-        default="TEST",
+        default="g17-d111",
         help="Credencial válida esperada en HELLO.",
     )
     parser.add_argument(
