@@ -32,7 +32,14 @@ typedef struct {
 
 static client_t clients[MAX_CLIENTS];
 
+// Prototipos de handlers
+static void handle_hello(int sock, int idx, const pdu_t *pdu);
+static void handle_wrq  (int sock, int idx, const pdu_t *pdu);
+static void handle_data (int sock, int idx, const pdu_t *pdu);
+static void handle_fin  (int sock, int idx, const pdu_t *pdu);
+
 static const char *VALID_CREDENTIAL = "g17-d111";
+
 
 // ---------- helpers ----------
 
@@ -248,6 +255,33 @@ static void handle_fin(int sock, int idx, const pdu_t *pdu) {
 
     (void)send_pdu(sock, &clients[idx].addr, &resp);
     reset_client(idx);
+}
+
+static void handle_data(int sock, int idx, const pdu_t *pdu) {
+    if (clients[idx].state != STATE_TRANSFER || !clients[idx].fp) {
+        fprintf(stderr, "[SERVER] DATA fuera de fase, descarto\n");
+        return; // según enunciado: descartar silenciosamente (o log)
+    }
+
+    pdu_t resp = {0};
+    resp.type = TYPE_ACK;
+    resp.seq  = pdu->seq; // ACK eco del seq recibido válido
+
+    if (pdu->seq != clients[idx].expected_seq) {
+        fprintf(stderr, "[SERVER] DATA con seq inesperado (recibí %u, esperaba %u)\n",
+                pdu->seq, clients[idx].expected_seq);
+        // Podrías re-ACKear el último válido; acá solo logueamos
+    } else {
+        size_t written = fwrite(pdu->data, 1, pdu->data_len, clients[idx].fp);
+        if (written != pdu->data_len) {
+            perror("fwrite");
+        }
+        clients[idx].expected_seq ^= 1;
+        printf("[SERVER] DATA OK cliente %d, seq=%u, bytes=%zu\n",
+               idx, pdu->seq, pdu->data_len);
+    }
+
+    (void)send_pdu(sock, &clients[idx].addr, &resp);
 }
 
 // ---------- main ----------
