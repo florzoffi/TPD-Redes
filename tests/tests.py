@@ -1068,6 +1068,126 @@ def test_wrq_long_filename(server_bin: Path, client_bin: Path, ctx: TestContext)
     print(f"    {DIM}Filename largo correctamente rechazado (sin archivo creado).{RESET}")
     return True
 
+def test_many_small_clients_stress(server_bin: Path, client_bin: Path, ctx: TestContext) -> bool:
+    """
+    Varios clientes (N>=8) enviando el mismo archivo pequeño en paralelo.
+    Verifica que el servidor soporte concurrencia y que todos los archivos lleguen íntegros.
+    """
+    test_id = "T17_many_small_clients_stress"
+    print(f"{BLUE}{test_id}{RESET} Stress de concurrencia con muchos clientes pequeños en paralelo")
+
+    local = DATA_DIR / "small.txt"
+    num_clients = 8  # puedes subirlo a 10 si querés apretar más
+    remote_names = [f"t17_c{i+1}.dat" for i in range(num_clients)]
+    remotes = [ROOT / name for name in remote_names]
+
+    # Limpiar cualquier archivo remoto previo
+    for r in remotes:
+        if r.exists():
+            r.unlink()
+
+    all_ok = True
+
+    with ServerProcess(server_bin) as sp:
+        procs = []
+        for i in range(num_clients):
+            p = subprocess.Popen(
+                [
+                    str(client_bin),
+                    "127.0.0.1",
+                    "g17-d111",
+                    str(local),
+                    remote_names[i],
+                ],
+                cwd=client_bin.parent,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            procs.append(p)
+
+        # Esperar a que todos terminen
+        for i, p in enumerate(procs):
+            try:
+                out, err = p.communicate(timeout=180)
+            except subprocess.TimeoutExpired:
+                p.kill()
+                out, err = p.communicate()
+                all_ok = False
+                print(f"{RED}Timeout en cliente {i+1}{RESET}")
+
+            if p.returncode != 0:
+                all_ok = False
+                print(f"{RED}Cliente {i+1} falló (exit={p.returncode}){RESET}")
+                print(f"{DIM}stdout cliente {i+1}:{RESET}\n{out}")
+                print(f"{DIM}stderr cliente {i+1}:{RESET}\n{err}")
+
+        if not all_ok:
+            out_s, err_s = sp.finalize()
+            print(f"{DIM}stdout server:{RESET}\n{out_s}")
+            print(f"{DIM}stderr server:{RESET}\n{err_s}")
+            return False
+
+    # Verificar que todos los archivos se hayan creado y sean correctos
+    global_ok = True
+    for i in range(num_clients):
+        if not remotes[i].exists():
+            print(f"{RED}No se creó archivo remoto para cliente {i+1} ({remotes[i].name}){RESET}")
+            global_ok = False
+        else:
+            ok = ctx.record_checksum(test_id, f"cliente_{i+1}", local, remotes[i])
+            if not ok:
+                global_ok = False
+
+    return global_ok
+
+def test_wrq_non_ascii_filename(server_bin: Path, client_bin: Path, ctx: TestContext) -> bool:
+    """
+    WRQ con filename que incluye caracteres no ASCII (por ejemplo 'ñ').
+    Según la consigna, el filename debe ser ASCII puro, así que esto debe ser rechazado:
+    - ACK con mensaje de error
+    - cliente con exit != 0
+    - sin archivo creado
+    """
+    test_id = "T18_wrq_non_ascii_filename"
+    print(f"{BLUE}{test_id}{RESET} WRQ con filename no ASCII")
+
+    local = DATA_DIR / "small.txt"
+    # 'tñ18.dat' tiene 8 caracteres, dentro del rango [4, 10], pero contiene 'ñ' (no ASCII)
+    remote_name = "tñ18.dat"
+    remote = ROOT / remote_name
+    if remote.exists():
+        remote.unlink()
+
+    with ServerProcess(server_bin) as sp:
+        rc, out, err = run_client(
+            client_bin,
+            "127.0.0.1",
+            "g17-d111",
+            local,
+            remote_name,
+        )
+        out_s, err_s = sp.finalize()
+
+    # Debe ser rechazado: exit != 0 y sin archivo creado
+    if rc == 0 or remote.exists():
+        print(f"{RED}[FAIL]{RESET} Filename con caracteres no ASCII fue aceptado.")
+        print("=== CLIENTE STDOUT ===")
+        print(out)
+        print("=== CLIENTE STDERR ===")
+        print(err)
+        print("=== SERVER STDOUT ===")
+        print(out_s)
+        print("=== SERVER STDERR ===")
+        print(err_s)
+        if remote.exists():
+            ctx.to_cleanup.add(remote)
+        return False
+
+    print(f"    {DIM}Filename no ASCII correctamente rechazado (sin archivo creado).{RESET}")
+    return True
+
+
 TESTS = [
     ("T1_small_file",              test_small_file),
     ("T2_big_parallel",            test_many_clients_parallel),
@@ -1085,4 +1205,6 @@ TESTS = [
     ("T14_hello_long_credential",  test_hello_long_credential),
     ("T15_wrq_short_filename",     test_wrq_short_filename),
     ("T16_wrq_long_filename",      test_wrq_long_filename),
+    ("T17_many_small_clients_stress", test_many_small_clients_stress),
+    ("T18_wrq_non_ascii_filename",    test_wrq_non_ascii_filename),
 ]

@@ -192,6 +192,17 @@ static void handle_wrq(int sock, int idx, const pdu_t *pdu) {
         return;
     }
 
+    for (size_t i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)filename[i];
+        if (c < 32 || c > 126) {  
+            const char *msg = "Filename invalido (no ASCII)";
+            memcpy(resp.data, msg, strlen(msg));
+            resp.data_len = strlen(msg);
+            send_pdu(sock, &clients[idx].addr, &resp);
+            return;
+        }
+    }
+
     strncpy(clients[idx].filename, filename, FILENAME_MAX_LEN);
     clients[idx].filename[FILENAME_MAX_LEN] = '\0';
 
