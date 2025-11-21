@@ -1,16 +1,3 @@
-#!/usr/bin/env python3
-"""
-bad_client.py
-
-Cliente UDP "malicioso" para testear el servidor C (udp_server.c).
-
-Soporta los modos:
-  - bad_seq_order:  HELLO + WRQ válidos, luego primer DATA con seq=1 (en vez de 0).
-  - wrq_without_hello: envía WRQ sin haber hecho HELLO.
-  - data_without_wrq: envía DATA sin HELLO ni WRQ.
-  - fin_wrong_filename: HELLO + WRQ + DATA correctos, pero FIN con filename distinto.
-"""
-
 import argparse
 import socket
 from pathlib import Path
