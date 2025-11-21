@@ -248,18 +248,15 @@ static void handle_fin(int sock, int idx, const pdu_t *pdu) {
         memcpy(resp.data, msg, strlen(msg));
         resp.data_len = strlen(msg);
         
-        // enviar el error
         (void)send_pdu(sock, &clients[idx].addr, &resp);
         
-        // CERRAR archivo para asegurar que quede creado
         if (clients[idx].fp) {
             fclose(clients[idx].fp);
             clients[idx].fp = NULL;
         }
     
-        // Liberar la sesión (pero NO borrar el archivo)
         clients[idx].state = STATE_FINISHED;
-        clients[idx].used = 0;  // o reset_client sin borrar filename
+        clients[idx].used = 0;  
     
         printf("[SERVER] FIN inválido, archivo '%s' queda creado.\n",
                clients[idx].filename);
