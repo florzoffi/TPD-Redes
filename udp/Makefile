@@ -3,7 +3,6 @@
 CC      = gcc
 CFLAGS  = -Wall -Wextra -std=c11 -g
 
-# Si tenés un protocol.c, agregalo acá:
 # COMMON_SRCS = protocol.c
 COMMON_SRCS =
 

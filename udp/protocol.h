@@ -8,7 +8,7 @@
 #define TYPE_FIN   5
 
 #define SERVER_PORT 20252
-#define MAX_DATA_SIZE 1478
+#define MAX_DATA_SIZE 1024
 #define FILENAME_MIN_LEN 4
 #define FILENAME_MAX_LEN 10
 
