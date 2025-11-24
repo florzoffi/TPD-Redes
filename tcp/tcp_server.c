@@ -56,9 +56,9 @@ int main(void) {
     int frame_len = 0;
 
     int measurement_id = 1;
-    FILE *f = fopen("delay.csv", "w");
+    FILE *f = fopen("delay_loss5.csv", "w");
     if (!f) {
-        perror("fopen delay.csv");
+        perror("fopen delay_loss5.csv");
         close(client_fd);
         close(listen_fd);
         exit(EXIT_FAILURE);
